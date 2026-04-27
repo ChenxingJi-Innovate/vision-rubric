@@ -882,24 +882,45 @@ function SingleSampleList({
     setSamples(samples.filter((s) => s.id !== id))
   }
 
-  async function score(s: SingleSample) {
-    update(s.id, { scoring: true, error: undefined })
+  // Score one image. Critically, we do NOT pre-fill humanScore from AI scores: pre-filling anchors
+  // the annotator and silently turns "human calibration" into "AI rubber-stamp". Human starts blank.
+  async function callScore(dataUrl: string): Promise<{ data?: ScoreResp; error?: string }> {
     try {
       const r = await fetch('/api/score-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rubric, imageDataUrl: s.dataUrl }),
+        body: JSON.stringify({ rubric, imageDataUrl: dataUrl }),
       })
       if (!r.ok) throw new Error(await r.text())
-      const data = (await r.json()) as ScoreResp
-      update(s.id, {
-        scoring: false,
-        aiScore: data,
-        humanScore: { ...data.scores }, // seed human with AI then user adjusts
-      })
+      return { data: (await r.json()) as ScoreResp }
     } catch (e: any) {
-      update(s.id, { scoring: false, error: e.message ?? 'score failed' })
+      return { error: e.message ?? 'score failed' }
     }
+  }
+
+  async function score(s: SingleSample) {
+    update(s.id, { scoring: true, error: undefined })
+    const { data, error } = await callScore(s.dataUrl)
+    update(s.id, { scoring: false, aiScore: data, error })
+  }
+
+  // Batch: fire AI score on every un-scored sample concurrently and commit results in one pass.
+  const [batchRunning, setBatchRunning] = useState(false)
+  async function scoreAll() {
+    const pending = samples.filter((s) => !s.aiScore && !s.scoring)
+    if (pending.length === 0) return
+    setBatchRunning(true)
+    const ids = new Set(pending.map((p) => p.id))
+    setSamples(samples.map((s) => (ids.has(s.id) ? { ...s, scoring: true, error: undefined } : s)))
+    const results = await Promise.all(pending.map(async (s) => ({ id: s.id, ...(await callScore(s.dataUrl)) })))
+    setSamples(
+      samples.map((s) => {
+        if (!ids.has(s.id)) return s
+        const hit = results.find((r) => r.id === s.id)!
+        return { ...s, scoring: false, aiScore: hit.data, error: hit.error }
+      })
+    )
+    setBatchRunning(false)
   }
 
   return (
@@ -928,10 +949,27 @@ function SingleSampleList({
           <Sparkles className="w-3 h-3" strokeWidth={1.5} />
           {loadingDemo ? t.loadingSample : t.trySampleImage}
         </button>
+        {samples.some((s) => !s.aiScore) && (
+          <button
+            onClick={scoreAll}
+            disabled={batchRunning}
+            className="inline-flex items-center gap-200 rounded-pill bg-pushpin-450 text-mochimalist px-500 py-300 text-200 font-semibold shadow-floating hover:-translate-y-0.5 hover:shadow-raised transition-all duration-500 ease-apple disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            <Sparkles className="w-4 h-4" strokeWidth={1.5} />
+            {batchRunning ? t.batchRunning : t.batchScore}
+          </button>
+        )}
         <span className="text-200 text-roboflow-500">
           {samples.length} {lang === 'zh' ? '张' : 'images'}
         </span>
       </div>
+
+      {samples.length > 0 && (
+        <div className="mt-400 inline-flex items-center gap-200 text-100 text-roboflow-500 bg-roboflow-50 rounded-pill px-400 py-200">
+          <Lightbulb className="w-3 h-3" strokeWidth={1.5} />
+          {t.blindHintSingle}
+        </div>
+      )}
 
       <div className="mt-600 grid gap-500">
         {samples.map((s) => (
