@@ -88,8 +88,8 @@ type Dict = {
 const DICT: Record<Lang, Dict> = {
   zh: {
     brand: 'AestheticForge',
-    hero1: '把"什么算好看"',
-    hero2: '变成可校准的',
+    hero1: '把模糊的审美判断，',
+    hero2: '凝练成可训练的',
     heroSub: '面向视觉模型的 SFT / DPO 数据生产工作台。先把模糊的"调性"凝练成 5 维评分锚点，再让视觉模型与人共同打分，把分歧点直接喂回训练。',
     step1: '锚点',
     step2: '打分 / 比较',
@@ -164,8 +164,8 @@ const DICT: Record<Lang, Dict> = {
   },
   en: {
     brand: 'AestheticForge',
-    hero1: 'Turn "what looks good"',
-    hero2: 'into a calibrated',
+    hero1: 'From subjective taste',
+    hero2: 'to a trainable',
     heroSub: 'An SFT / DPO data forge for image-aesthetic training. Distill a vague vibe into a 5-dimension rubric, score with AI and human side by side, and feed the disagreements back into the data.',
     step1: 'Anchor',
     step2: 'Score / Compare',
